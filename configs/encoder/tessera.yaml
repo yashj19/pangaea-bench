@@ -1,0 +1,17 @@
+_target_: pangaea.encoders.tessera_encoder.TesseraEncoder
+
+# n/a for geotessera
+encoder_weights: null
+download_url: null
+
+output_layers: [0]
+output_dim: 128
+input_bands:
+  optical: []
+
+# geoTessera specific
+cache_dir: ./geotessera_cache  # directory to cache downloaded embeddings
+
+
+
+
