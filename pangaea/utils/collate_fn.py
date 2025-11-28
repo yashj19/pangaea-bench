@@ -38,7 +38,7 @@ def get_collate_fn(modalities: list[str]) -> Callable:
                         )
 
         # stack all images and targets
-        return {
+        result = {
             "image": {
                 modality: torch.stack([x["image"][modality] for x in batch])
                 for modality in modalities
@@ -46,5 +46,14 @@ def get_collate_fn(modalities: list[str]) -> Callable:
             "target": torch.stack([x["target"] for x in batch]),
             "metadata": [sample["metadata"] for sample in batch]
         }
+
+        # handle _metadata separately if it exists (for encoders like GeoTessera)
+        if "_metadata" in batch[0]["image"]:
+            result["image"]["_metadata"] = {
+                key: [x["image"]["_metadata"][key] for x in batch]
+                for key in batch[0]["image"]["_metadata"].keys()
+            }
+
+        return result
 
     return collate_fn
