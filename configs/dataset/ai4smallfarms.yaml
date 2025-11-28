@@ -52,3 +52,6 @@ data_min:
     - 9.0
     - 1.0
     - 66.0
+
+startYear: 2023
+endYear: 2023

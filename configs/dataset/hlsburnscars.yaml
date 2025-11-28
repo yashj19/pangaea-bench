@@ -7,6 +7,9 @@ img_size: 512
 multi_temporal: False
 multi_modal: False
 
+startYear: 2018
+endYear: 2021
+
 # classes
 ignore_index: -1
 num_classes: 2

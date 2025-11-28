@@ -10,6 +10,7 @@ import numpy as np
 import tifffile as tiff
 import torch
 from sklearn.model_selection import train_test_split
+import rasterio
 
 from pangaea.datasets.base import RawGeoFMDataset
 from pangaea.datasets.utils import DownloadProgressBar
@@ -35,6 +36,8 @@ class HLSBurnScars(RawGeoFMDataset):
         data_max: dict[str, list[str]],
         download_url: str,
         auto_download: bool,
+        startYear: int,
+        endYear: int,
     ):
         """Initialize the HLSBurnScars dataset.
         Link: https://huggingface.co/datasets/ibm-nasa-geospatial/hls_burn_scars
@@ -85,6 +88,8 @@ class HLSBurnScars(RawGeoFMDataset):
             data_max=data_max,
             download_url=download_url,
             auto_download=auto_download,
+            startYear=startYear,
+            endYear=endYear,
         )
 
         self.root_path = root_path
@@ -169,7 +174,7 @@ class HLSBurnScars(RawGeoFMDataset):
                 "optical": image,
             },
             "target": target,
-            "metadata": {},
+            "metadata": self.read_tiff_metadata(self.image_list[index]),
         }
 
         return output

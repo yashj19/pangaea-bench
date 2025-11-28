@@ -31,6 +31,8 @@ class AI4SmallFarms(RawGeoFMDataset):
         data_max: dict[str, list[str]],
         download_url: str,
         auto_download: bool,
+        startYear: int,
+        endYear: int,
     ):
         """Initialize the AI4SmallFarms dataset.
             Link: https://phys-techsciences.datastations.nl/dataset.xhtml?persistentId=doi:10.17026/dans-xy6-ngg6
@@ -61,6 +63,8 @@ class AI4SmallFarms(RawGeoFMDataset):
             e.g. {"s2": [b1_max, ..., bn_max], "s1": [b1_max, ..., bn_max]}
             download_url (str): url to download the dataset.
             auto_download (bool): whether to download the dataset automatically.
+            startYear (int): start year of the dataset.
+            endYear (int): end year of the dataset.
         """
         super(AI4SmallFarms, self).__init__(
             split=split,
@@ -80,6 +84,8 @@ class AI4SmallFarms(RawGeoFMDataset):
             data_max=data_max,
             download_url=download_url,
             auto_download=auto_download,
+            startYear=startYear,
+            endYear=endYear,
         )
 
         self.data_mean = data_mean
@@ -129,7 +135,7 @@ class AI4SmallFarms(RawGeoFMDataset):
                 "optical": image,
             },
             "target": target,
-            "metadata": {},
+            "metadata": self.read_tiff_metadata(self.image_list[index]),
         }
 
     @staticmethod
