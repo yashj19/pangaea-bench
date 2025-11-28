@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import Dataset, Subset
 
 from pangaea.engine.data_preprocessor import Preprocessor
+import rasterio
 
 
 class RawGeoFMDataset(Dataset):
@@ -28,6 +29,8 @@ class RawGeoFMDataset(Dataset):
         data_max: dict[str, list[str]],
         download_url: str,
         auto_download: bool,
+        startYear: int,
+        endYear: int,
     ):
         """Initializes the dataset.
 
@@ -57,6 +60,8 @@ class RawGeoFMDataset(Dataset):
             e.g. {"s2": [b1_max, ..., bn_max], "s1": [b1_max, ..., bn_max]}
             download_url (str): url to download the dataset.
             auto_download (bool): whether to download the dataset automatically.
+            startYear (int): the first year that the satellite images are taken from
+            endYear (int): the last year that the satellite images are taken from
         """
         self.split = split
         self.dataset_name = dataset_name
@@ -75,6 +80,8 @@ class RawGeoFMDataset(Dataset):
         self.data_max = data_max
         self.download_url = download_url
         self.auto_download = auto_download
+        self.startYear = startYear
+        self.endYear = endYear
 
         if not os.path.exists(self.root_path):
             self.download(self)
@@ -120,6 +127,21 @@ class RawGeoFMDataset(Dataset):
             NotImplementedError: raise if the method is not implemented
         """
         raise NotImplementedError
+    
+    def read_tiff_metadata(self, tiff_file) -> dict:
+        """Helper function to return metadata from a TIFF file."""
+        with rasterio.open(tiff_file) as src:
+            bounds = src.bounds
+            crs = src.crs.to_string() if src.crs else "EPSG:4326"
+            transform = src.transform
+
+        return {
+            "bounds": (bounds.left, bounds.bottom, bounds.right, bounds.top),
+            "crs": crs,
+            "transform": tuple(transform)[:6],  # convert Affine to 6-element tuple
+            "filename": tiff_file,
+            "year": self.endYear,  # use endYear from dataset config
+        }
 
 
 class GeoFMSubset(Subset):
@@ -181,6 +203,7 @@ class GeoFMDataset(Dataset):
                 {
                 "optical": torch.Tensor of shape (C T H W) (where T=1 if single-temporal dataset),
                  "sar": torch.Tensor of shape (C T H W) (where T=1 if single-temporal dataset),
+                 "_metadata": dict with bounds, crs, transform (if available)
                  },
             "target": torch.Tensor of shape (H W) of type torch.int64 for segmentation, torch.float for
             regression datasets.,
@@ -190,6 +213,15 @@ class GeoFMDataset(Dataset):
         output = self.raw_dataset[i // self.replicate]
         if self.preprocessor is not None:
             output = self.preprocessor(output)
+
+        # add geospatial metadata to image dict for encoders that need it (e.g. GeoTessera)
+        if "bounds" in output.get("metadata", {}):
+            output["image"]["_metadata"] = {
+                "bounds": output["metadata"].get("bounds"),
+                "crs": output["metadata"].get("crs"),
+                "transform": output["metadata"].get("transform"),
+                "year": output["metadata"].get("year"),
+            }
 
         return output
 
