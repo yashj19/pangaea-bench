@@ -84,6 +84,8 @@ class Pastis(RawGeoFMDataset):
         data_max: dict[str, list[str]],
         download_url: str,
         auto_download: bool,
+        startYear: int,
+        endYear: int,
     ):
         """Initialize the PASTIS dataset.
 
@@ -113,6 +115,8 @@ class Pastis(RawGeoFMDataset):
             e.g. {"s2": [b1_max, ..., bn_max], "s1": [b1_max, ..., bn_max]}
             download_url (str): url to download the dataset.
             auto_download (bool): whether to download the dataset automatically.
+            startYear (int): start year of the dataset.
+            endYear (int): end year of the dataset.
         """
         super(Pastis, self).__init__(
             split=split,
@@ -132,6 +136,8 @@ class Pastis(RawGeoFMDataset):
             data_max=data_max,
             download_url=download_url,
             auto_download=auto_download,
+            startYear=startYear,
+            endYear=endYear,
         )
 
         assert split in ["train", "val", "test"], "Split must be train, val or test"
@@ -181,20 +187,24 @@ class Pastis(RawGeoFMDataset):
             )[0].astype(np.int32)
         )
         output = {"label": label, "name": name}
-
+        metadata = {}
         for modality in self.modalities:
             if modality == "aerial":
+                aerial_tiff_path = os.path.join(
+                    self.root_path,
+                    "DATA_SPOT/PASTIS_SPOT6_RVB_1M00_2019/SPOT6_RVB_1M00_2019_"
+                    + str(name)
+                    + ".tif",
+                )
                 with rasterio.open(
-                    os.path.join(
-                        self.root_path,
-                        "DATA_SPOT/PASTIS_SPOT6_RVB_1M00_2019/SPOT6_RVB_1M00_2019_"
-                        + str(name)
-                        + ".tif",
-                    )
+                    aerial_tiff_path,
+                    "r",
                 ) as f:
                     output["aerial"] = split_image(
                         torch.FloatTensor(f.read()), self.nb_split, part
                     )
+                metadata = self.read_tiff_metadata(aerial_tiff_path)
+
             elif modality == "s1-median":
                 modality_name = "s1a"
                 images = split_image(
@@ -363,7 +373,7 @@ class Pastis(RawGeoFMDataset):
                 "sar": sar_ts.to(torch.float32),
             },
             "target": output["label"].to(torch.int64),
-            "metadata": {},
+            "metadata": metadata,
         }
 
     def __len__(self) -> int:
