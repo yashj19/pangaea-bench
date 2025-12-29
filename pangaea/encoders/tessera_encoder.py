@@ -64,9 +64,6 @@ class TesseraEncoder(Encoder):
         self.cache_dir = Path(cache_dir)
         self.cache_dir.mkdir(parents=True, exist_ok=True)
 
-        # in-memory cache for embeddings (faster access): bounds+year+size -> tensor
-        self.embedding_cache = {}
-
     def load_encoder_weights(self, logger: Logger) -> None:
         # not applicable for GeoTessera
         logger.info(
@@ -106,11 +103,10 @@ class TesseraEncoder(Encoder):
         Returns:
             Tensor of shape (128, target_height, target_width)
         """
+        print("downloading bounds:", bounds, "year:", year)
         # download embeddings from GeoTessera
-        embeddings_generator = self.gt.fetch_embeddings(
-            bounds=bounds,
-            year=year
-        )
+        tiles_to_fetch = self.gt.registry.load_blocks_for_region(bounds=bounds, year=year)
+        embeddings_generator = self.gt.fetch_embeddings(tiles_to_fetch)
 
         # create target array for final output
         target_array = np.zeros((128, target_height, target_width), dtype=np.float32)
@@ -168,7 +164,15 @@ class TesseraEncoder(Encoder):
             List containing single tensor of shape (B, 128, H, W)
         """
         # get batch size and target dimensions from the optical input
-        B, C, T, H, W = image["optical"].shape
+        # Handle both 4D (B, C, H, W) and 5D (B, C, T, H, W) inputs
+        if image["optical"].ndim == 5:
+            B, _, _, H, W = image["optical"].shape
+            device = image["optical"].device
+        elif image["optical"].ndim == 4:
+            B, _, H, W = image["optical"].shape
+            device = image["optical"].device
+        else:
+            raise ValueError(f"Expected 4D or 5D input tensor, got {image['optical'].ndim}D")
 
         # extract metadata, throw if not found
         if "_metadata" not in image:
@@ -194,38 +198,29 @@ class TesseraEncoder(Encoder):
 
             # generate cache key
             cache_key = self._get_cache_key(bounds, year, H, W)
+            cache_path = self._get_cache_path(cache_key)
 
-            # check in-memory cache first
-            if cache_key in self.embedding_cache:
-                embedding = self.embedding_cache[cache_key]
+            if cache_path.exists():
+                # load from disk cache
+                embedding = torch.load(cache_path, map_location='cpu', weights_only=True)
             else:
-                # check disk cache
-                cache_path = self._get_cache_path(cache_key)
+                # download and map embedding
+                embedding = self._download_and_map_embedding(
+                    bounds=bounds,
+                    year=year,
+                    target_height=H,
+                    target_width=W,
+                    target_crs=crs,
+                    target_transform=transform,
+                )
 
-                if cache_path.exists():
-                    # load from disk cache
-                    embedding = torch.load(cache_path, map_location='cpu', weights_only=True)
-                else:
-                    # download and map embedding
-                    embedding = self._download_and_map_embedding(
-                        bounds=bounds,
-                        year=year,
-                        target_height=H,
-                        target_width=W,
-                        target_crs=crs,
-                        target_transform=transform,
-                    )
-
-                    # save to disk cache
-                    torch.save(embedding, cache_path)
-
-                # store in in-memory cache
-                self.embedding_cache[cache_key] = embedding
+                # save to disk cache
+                torch.save(embedding, cache_path)
 
             batch_embeddings.append(embedding)
 
-        # stack batch
-        embeddings = torch.stack(batch_embeddings, dim=0)  # (B, 128, H, W)
+        # stack batch and move to correct device
+        embeddings = torch.stack(batch_embeddings, dim=0).to(device)  # (B, 128, H, W)
 
         # return as list for compatibility with decoder interface
         return [embeddings]
