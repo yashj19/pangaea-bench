@@ -228,9 +228,11 @@ class SegUPerNet(Decoder):
             # [B C T=1 H W] -> [B C H W]
             if not self.finetune:
                 with torch.no_grad():
-                    feat = self.encoder({k: v[:, :, 0, :, :] for k, v in img.items()})
+                    feat = self.encoder({k: v[:, :, 0, :, :] if k != "_metadata" else v
+                                        for k, v in img.items()})
             else:
-                feat = self.encoder({k: v[:, :, 0, :, :] for k, v in img.items()})
+                feat = self.encoder({k: v[:, :, 0, :, :] if k != "_metadata" else v
+                                    for k, v in img.items()})
 
         feat = self.neck(feat)
         feat = self._forward_feature(feat)

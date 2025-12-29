@@ -29,6 +29,8 @@ class BasePreprocessor:
     def check_dimension(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]):
         """check dimension (C, T, H, W) of data"""
         for k, v in data["image"].items():
+            if k == "_metadata":  # Skip metadata
+                continue
             if len(v.shape) != 4:
                 raise AssertionError(
                     f"Image dimension must be 4 (C, T, H, W), Got {str(len(v.shape))}"
@@ -41,11 +43,17 @@ class BasePreprocessor:
 
     def check_size(self, data: dict[str, torch.Tensor | dict[str, torch.Tensor]]):
         """check if data size is equal"""
-        base_shape = data["image"][list(data["image"].keys())[0]].shape
+        # Get first non-metadata key
+        tensor_keys = [k for k in data["image"].keys() if k != "_metadata"]
+        if not tensor_keys:
+            return
+        base_shape = data["image"][tensor_keys[0]].shape
 
         for k, v in data["image"].items():
+            if k == "_metadata":  # Skip metadata
+                continue
             if v.shape[1:] != base_shape[1:]:
-                shape = {k: tuple(v.shape[1:]) for k, v in data["image"].items()}
+                shape = {k: tuple(v.shape[1:]) for k, v in data["image"].items() if k != "_metadata"}
                 raise AssertionError(
                     f"Image size (T, H, W) from all modalities must be equal, Got {str(shape)}"
                 )
@@ -460,6 +468,8 @@ class RandomCrop(BasePreprocessor):
             pad_img = max(self.size[0] - height, 0), max(self.size[1] - width, 0)
             height, width = height + 2 * pad_img[0], width + 2 * pad_img[1]
             for k, v in data["image"].items():
+                if k == "_metadata":  # Skip metadata
+                    continue
                 padded_img = (
                     self.pad_value[k].reshape(-1, 1, 1, 1).repeat(1, t, height, width)
                 )
@@ -500,6 +510,8 @@ class RandomCrop(BasePreprocessor):
         i, j, h, w = self.get_params(data=data)
 
         for k, v in data["image"].items():
+            if k == "_metadata":  # Skip metadata
+                continue
             data["image"][k] = TF.crop(v, i, j, h, w)
 
         data["target"] = TF.crop(data["target"], i, j, h, w)
@@ -642,6 +654,8 @@ class ImportanceRandomCrop(RandomCrop):
         i, j, h, w = crop_candidates[crop_idx]
 
         for k, v in data["image"].items():
+            if k == "_metadata":  # Skip metadata
+                continue
             data["image"][k] = TF.crop(v, i, j, h, w)
 
         data["target"] = TF.crop(data["target"], i, j, h, w)
@@ -720,6 +734,8 @@ class Resize(BasePreprocessor):
              "metadata": dict}.
         """
         for k, v in data["image"].items():
+            if k == "_metadata":  # Skip metadata
+                continue
             data["image"][k] = TF.resize(
                 data["image"][k],
                 self.size,
@@ -872,6 +888,8 @@ class RandomResizedCrop(BasePreprocessor):
         i, j, h, w = self.get_params((h_img, w_img), self.scale, self.ratio)
 
         for k, v in data["image"].items():
+            if k == "_metadata":  # Skip metadata
+                continue
             data["image"][k] = TF.resized_crop(
                 data["image"][k],
                 i,

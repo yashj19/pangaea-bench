@@ -132,7 +132,8 @@ class Trainer:
         end_time = time.time()
         for batch_idx, data in enumerate(self.train_loader):
             image, target = data["image"], data["target"]
-            image = {modality: value.to(self.device) for modality, value in image.items()}
+            image = {modality: value.to(self.device) if isinstance(value, torch.Tensor) else value
+                     for modality, value in image.items()}
             target = target.to(self.device)
 
             self.training_stats["data_time"].update(time.time() - end_time)

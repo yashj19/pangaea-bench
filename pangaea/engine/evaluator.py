@@ -105,6 +105,8 @@ class Evaluator:
         num_crops_per_img = h * w
 
         for k, v in img.items():
+            if k == "_metadata":  # Skip metadata, not a tensor
+                continue
             img_crops = []
             for i in range(h):
                 for j in range(w):
@@ -115,7 +117,10 @@ class Evaluator:
         max_batch = max_batch if max_batch is not None else b * num_crops_per_img
         batch_num = int(math.ceil(b * num_crops_per_img / max_batch))
         for i in range(batch_num):
-            img_ = {k: v[max_batch * i: min(max_batch * i + max_batch, b * num_crops_per_img)] for k, v in img.items()}
+            img_ = {k: v[max_batch * i: min(max_batch * i + max_batch, b * num_crops_per_img)]
+                    for k, v in img.items() if k != "_metadata"}
+            if "_metadata" in img:  # Preserve metadata if present
+                img_["_metadata"] = img["_metadata"]
             pred_ = model.forward(img_, output_shape=(input_size, input_size))
             pred.append(pred_)
         pred = torch.cat(pred, dim=0)
@@ -179,9 +184,10 @@ class LinearClassificationEvaluator(Evaluator):
         tag = f"Evaluating {model_name} on {self.split} set"
         for batch_idx, data in enumerate(tqdm(self.val_loader, desc=tag)):
             image, target = data["image"], data["target"]
-            image = {k: v.to(self.device) for k, v in image.items()}
+            image = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+                     for k, v in image.items()}
             target = target.to(self.device)
-            
+
             with torch.no_grad():
                 logits = model(image)
             
@@ -326,7 +332,8 @@ class KNNClassificationEvaluator(Evaluator):
 
         for batch in tqdm(self.val_loader, desc="kNN-compute", leave=True):
             image, target = batch["image"], batch["target"]
-            image = {k: v.to(self.device) for k, v in image.items()}
+            image = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+                     for k, v in image.items()}
             target = target.to(self.device)
 
             # one-hot encode val targets for multi-label
@@ -434,7 +441,8 @@ class SegEvaluator(Evaluator):
         for batch_idx, data in enumerate(tqdm(self.val_loader, desc=tag)):
 
             image, target = data["image"], data["target"]
-            image = {k: v.to(self.device) for k, v in image.items()}
+            image = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+                     for k, v in image.items()}
             target = target.to(self.device)
 
             if self.inference_mode == "sliding":
@@ -619,7 +627,8 @@ class RegEvaluator(Evaluator):
 
         for batch_idx, data in enumerate(tqdm(self.val_loader, desc=tag)):
             image, target = data['image'], data['target']
-            image = {k: v.to(self.device) for k, v in image.items()}
+            image = {k: v.to(self.device) if isinstance(v, torch.Tensor) else v
+                     for k, v in image.items()}
             target = target.to(self.device)
 
             if self.inference_mode == "sliding":
